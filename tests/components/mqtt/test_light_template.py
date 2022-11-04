@@ -337,6 +337,61 @@ async def test_state_brightness_color_effect_temp_change_via_topic(
     assert light_state.attributes.get("effect") == "rainbow"
 
 
+async def test_state_hs_color_change_via_topic(
+    hass, mqtt_mock_entry_with_yaml_config
+):
+    """Test state, bri, color, effect, color temp change."""
+    assert await async_setup_component(
+        hass,
+        mqtt.DOMAIN,
+        {
+            mqtt.DOMAIN: {
+                light.DOMAIN: {
+                    "schema": "template",
+                    "name": "test",
+                    "effect_list": ["rainbow", "colorloop"],
+                    "state_topic": "test_light_rgb",
+                    "command_topic": "test_light_rgb/set",
+                    "command_on_template": "on,"
+                    "{{ brightness|d }},"
+                    "{{ color_temp|d }},"
+                    "{{ red|d }}-"
+                    "{{ green|d }}-"
+                    "{{ blue|d }},"
+                    "{{ effect|d }}",
+                    "command_off_template": "off",
+                    "state_template": '{{ value.split(",")[0] }}',
+                    "brightness_template": '{{ value.split(",")[1] }}',
+                    "color_temp_template": '{{ value.split(",")[2] }}',
+                    "hue_template": '{{ value.split(",")[3].' 'split("-")[0] }}',
+                    "saturation_template": '{{ value.split(",")[3].' 'split("-")[1] }}',
+                    "effect_template": '{{ value.split(",")[4] }}',
+                }
+            }
+        },
+    )
+    await hass.async_block_till_done()
+    await mqtt_mock_entry_with_yaml_config()
+
+    state = hass.states.get("light.test")
+    assert state.state == STATE_UNKNOWN
+    assert state.attributes.get("rgb_color") is None
+    assert state.attributes.get("brightness") is None
+    assert state.attributes.get("effect") is None
+    assert state.attributes.get("color_temp") is None
+    assert not state.attributes.get(ATTR_ASSUMED_STATE)
+
+    # turn on the light
+    async_fire_mqtt_message(hass, "test_light_rgb", "on,255,145,128-255,")
+
+    state = hass.states.get("light.test")
+    assert state.state == STATE_ON
+    assert state.attributes.get("rgb_color") == (255, 128, 63)
+    assert state.attributes.get("brightness") == 255
+    assert state.attributes.get("color_temp") is None  # rgb color has priority
+    assert state.attributes.get("effect") is None
+
+
 async def test_sending_mqtt_commands_and_optimistic(
     hass, mqtt_mock_entry_with_yaml_config
 ):

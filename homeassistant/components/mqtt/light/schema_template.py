@@ -63,6 +63,8 @@ CONF_GREEN_TEMPLATE = "green_template"
 CONF_MAX_MIREDS = "max_mireds"
 CONF_MIN_MIREDS = "min_mireds"
 CONF_RED_TEMPLATE = "red_template"
+CONF_HUE_TEMPLATE = "hue_template"
+CONF_SATURATION_TEMPLATE = "saturation_template"
 CONF_WHITE_VALUE_TEMPLATE = "white_value_template"
 
 _PLATFORM_SCHEMA_BASE = (
@@ -82,6 +84,8 @@ _PLATFORM_SCHEMA_BASE = (
             vol.Optional(CONF_OPTIMISTIC, default=DEFAULT_OPTIMISTIC): cv.boolean,
             vol.Optional(CONF_RED_TEMPLATE): cv.template,
             vol.Optional(CONF_STATE_TEMPLATE): cv.template,
+            vol.Optional(CONF_HUE_TEMPLATE): cv.template,
+            vol.Optional(CONF_SATURATION_TEMPLATE): cv.template,
         }
     )
     .extend(MQTT_ENTITY_COMMON_SCHEMA.schema)
@@ -157,6 +161,8 @@ class MqttLightTemplate(MqttEntity, LightEntity, RestoreEntity):
                 CONF_EFFECT_TEMPLATE,
                 CONF_GREEN_TEMPLATE,
                 CONF_RED_TEMPLATE,
+                CONF_HUE_TEMPLATE,
+                CONF_SATURATION_TEMPLATE,
                 CONF_STATE_TEMPLATE,
             )
         }
@@ -176,6 +182,9 @@ class MqttLightTemplate(MqttEntity, LightEntity, RestoreEntity):
             self._templates[CONF_RED_TEMPLATE] is not None
             and self._templates[CONF_GREEN_TEMPLATE] is not None
             and self._templates[CONF_BLUE_TEMPLATE] is not None
+        ) or (
+            self._templates[CONF_HUE_TEMPLATE] is not None
+            and self._templates[CONF_SATURATION_TEMPLATE] is not None
         ):
             color_modes.add(ColorMode.HS)
         self._supported_color_modes = filter_supported_color_modes(color_modes)
@@ -244,6 +253,24 @@ class MqttLightTemplate(MqttEntity, LightEntity, RestoreEntity):
                         self._hs = color_util.color_RGB_to_hs(
                             int(red), int(green), int(blue)
                         )
+                except ValueError:
+                    _LOGGER.warning("Invalid color value received")
+
+            elif (
+                self._templates[CONF_HUE_TEMPLATE] is not None
+                and self._templates[CONF_SATURATION_TEMPLATE] is not None
+            ):
+                try:
+                    hue = self._templates[
+                        CONF_HUE_TEMPLATE
+                    ].async_render_with_possible_json_value(msg.payload)
+                    saturation = self._templates[
+                        CONF_SATURATION_TEMPLATE
+                    ].async_render_with_possible_json_value(msg.payload)
+                    if hue == "None" and saturation == "None":
+                        self._hs = None
+                    else:
+                        self._hs = int(hue), int(sat)
                 except ValueError:
                     _LOGGER.warning("Invalid color value received")
 
