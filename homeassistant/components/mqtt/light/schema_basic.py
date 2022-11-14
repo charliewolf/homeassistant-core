@@ -17,6 +17,7 @@ from homeassistant.components.light import (
     ATTR_RGBW_COLOR,
     ATTR_RGBWW_COLOR,
     ATTR_SUPPORTED_COLOR_MODES,
+    ATTR_TRANSITION,
     ATTR_WHITE,
     ATTR_XY_COLOR,
     ENTITY_ID_FORMAT,
@@ -700,7 +701,7 @@ class MqttLight(MqttEntity, LightEntity, RestoreEntity):
                     brightness = kwargs.get(ATTR_BRIGHTNESS, self.brightness or 255)
             return tuple(int(channel * brightness / 255) for channel in color)
 
-        def render_rgbx(color, template, color_mode):
+        def render_rgbx(color, template, color_mode, additional_template_args={}):
             """Render RGBx payload."""
             if tpl := self._command_templates[template]:
                 keys = ["red", "green", "blue"]
@@ -708,7 +709,9 @@ class MqttLight(MqttEntity, LightEntity, RestoreEntity):
                     keys.append("white")
                 elif color_mode == ColorMode.RGBWW:
                     keys.extend(["cold_white", "warm_white"])
-                rgb_color_str = tpl(variables=zip(keys, color))
+                template_args = zip(keys, color)
+                template_args.update(additional_template_args)
+                rgb_color_str = tpl(variables=template_args)
             else:
                 rgb_color_str = ",".join(str(channel) for channel in color)
             return rgb_color_str
@@ -749,7 +752,7 @@ class MqttLight(MqttEntity, LightEntity, RestoreEntity):
             CONF_RGB_COMMAND_TOPIC
         ] is not None:
             scaled = scale_rgbx(rgb)
-            rgb_s = render_rgbx(scaled, CONF_RGB_COMMAND_TEMPLATE, ColorMode.RGB)
+            rgb_s = render_rgbx(scaled, CONF_RGB_COMMAND_TEMPLATE, ColorMode.RGB, additional_template_args={"transition": kwargs[ATTR_TRANSITION]} if ATTR_TRANSITION in kwargs else {})
             await publish(CONF_RGB_COMMAND_TOPIC, rgb_s)
             should_update |= set_optimistic(ATTR_RGB_COLOR, rgb, ColorMode.RGB)
 
@@ -757,7 +760,7 @@ class MqttLight(MqttEntity, LightEntity, RestoreEntity):
             CONF_RGBW_COMMAND_TOPIC
         ] is not None:
             scaled = scale_rgbx(rgbw)
-            rgbw_s = render_rgbx(scaled, CONF_RGBW_COMMAND_TEMPLATE, ColorMode.RGBW)
+            rgbw_s = render_rgbx(scaled, CONF_RGBW_COMMAND_TEMPLATE, ColorMode.RGBW, additional_template_args={"transition": kwargs[ATTR_TRANSITION]} if ATTR_TRANSITION in kwargs else {})
             await publish(CONF_RGBW_COMMAND_TOPIC, rgbw_s)
             should_update |= set_optimistic(ATTR_RGBW_COLOR, rgbw, ColorMode.RGBW)
 
@@ -765,7 +768,7 @@ class MqttLight(MqttEntity, LightEntity, RestoreEntity):
             CONF_RGBWW_COMMAND_TOPIC
         ] is not None:
             scaled = scale_rgbx(rgbww)
-            rgbww_s = render_rgbx(scaled, CONF_RGBWW_COMMAND_TEMPLATE, ColorMode.RGBWW)
+            rgbww_s = render_rgbx(scaled, CONF_RGBWW_COMMAND_TEMPLATE, ColorMode.RGBWW, additional_template_args={"transition": kwargs[ATTR_TRANSITION]} if ATTR_TRANSITION in kwargs else {})
             await publish(CONF_RGBWW_COMMAND_TOPIC, rgbww_s)
             should_update |= set_optimistic(ATTR_RGBWW_COLOR, rgbww, ColorMode.RGBWW)
 
@@ -787,7 +790,10 @@ class MqttLight(MqttEntity, LightEntity, RestoreEntity):
             # Make sure the brightness is not rounded down to 0
             device_brightness = max(device_brightness, 1)
             if tpl := self._command_templates[CONF_BRIGHTNESS_COMMAND_TEMPLATE]:
-                device_brightness = tpl(variables={"value": device_brightness})
+                brightness_template_args = {"value": device_brightness}
+                if ATTR_TRANSITION in kwargs:
+                    brightness_template_args["transition"] = kwargs[ATTR_TRANSITION]
+                device_brightness = tpl(variables=brightness_template_args)
             await publish(CONF_BRIGHTNESS_COMMAND_TOPIC, device_brightness)
             should_update |= set_optimistic(ATTR_BRIGHTNESS, kwargs[ATTR_BRIGHTNESS])
         elif (
@@ -797,7 +803,7 @@ class MqttLight(MqttEntity, LightEntity, RestoreEntity):
         ):
             rgb_color = self.rgb_color or (255,) * 3
             rgb = scale_rgbx(rgb_color, kwargs[ATTR_BRIGHTNESS])
-            rgb_s = render_rgbx(rgb, CONF_RGB_COMMAND_TEMPLATE, ColorMode.RGB)
+            rgb_s = render_rgbx(rgb, CONF_RGB_COMMAND_TEMPLATE, ColorMode.RGB, additional_template_args={"transition": kwargs[ATTR_TRANSITION]} if ATTR_TRANSITION in kwargs else {})
             await publish(CONF_RGB_COMMAND_TOPIC, rgb_s)
             should_update |= set_optimistic(ATTR_BRIGHTNESS, kwargs[ATTR_BRIGHTNESS])
         elif (
@@ -807,7 +813,7 @@ class MqttLight(MqttEntity, LightEntity, RestoreEntity):
         ):
             rgbw_color = self.rgbw_color or (255,) * 4
             rgbw = scale_rgbx(rgbw_color, kwargs[ATTR_BRIGHTNESS])
-            rgbw_s = render_rgbx(rgbw, CONF_RGBW_COMMAND_TEMPLATE, ColorMode.RGBW)
+            rgbw_s = render_rgbx(rgbw, CONF_RGBW_COMMAND_TEMPLATE, ColorMode.RGBW, additional_template_args={"transition": kwargs[ATTR_TRANSITION]} if ATTR_TRANSITION in kwargs else {})
             await publish(CONF_RGBW_COMMAND_TOPIC, rgbw_s)
             should_update |= set_optimistic(ATTR_BRIGHTNESS, kwargs[ATTR_BRIGHTNESS])
         elif (
@@ -817,7 +823,7 @@ class MqttLight(MqttEntity, LightEntity, RestoreEntity):
         ):
             rgbww_color = self.rgbww_color or (255,) * 5
             rgbww = scale_rgbx(rgbww_color, kwargs[ATTR_BRIGHTNESS])
-            rgbww_s = render_rgbx(rgbww, CONF_RGBWW_COMMAND_TEMPLATE, ColorMode.RGBWW)
+            rgbww_s = render_rgbx(rgbww, CONF_RGBWW_COMMAND_TEMPLATE, ColorMode.RGBWW, additional_template_args={"transition": kwargs[ATTR_TRANSITION]} if ATTR_TRANSITION in kwargs else {})
             await publish(CONF_RGBWW_COMMAND_TOPIC, rgbww_s)
             should_update |= set_optimistic(ATTR_BRIGHTNESS, kwargs[ATTR_BRIGHTNESS])
         if (
@@ -826,7 +832,10 @@ class MqttLight(MqttEntity, LightEntity, RestoreEntity):
         ):
             color_temp = int(kwargs[ATTR_COLOR_TEMP])
             if tpl := self._command_templates[CONF_COLOR_TEMP_COMMAND_TEMPLATE]:
-                color_temp = tpl(variables={"value": color_temp})
+                color_temp_template_args = {"value": color_temp}
+                if ATTR_TRANSITION in kwargs:
+                    color_temp_template_args["transition"] = kwargs[ATTR_TRANSITION]
+                color_temp = tpl(variables=color_temp_template_args)
 
             await publish(CONF_COLOR_TEMP_COMMAND_TOPIC, color_temp)
             should_update |= set_optimistic(

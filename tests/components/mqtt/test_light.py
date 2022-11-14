@@ -990,6 +990,45 @@ async def test_sending_mqtt_rgb_command_with_template(
     assert state.attributes["rgb_color"] == (255, 128, 64)
 
 
+async def test_sending_mqtt_rgb_and_transition_command_with_template(
+    hass, mqtt_mock_entry_with_yaml_config
+):
+    """Test the sending of RGB command with template."""
+    config = {
+        light.DOMAIN: {
+            "name": "test",
+            "command_topic": "test_light_rgb/set",
+            "rgb_command_topic": "test_light_rgb/rgb/set",
+            "rgb_command_template": '{"color": {{ "#%02x%02x%02x" | '
+            "format(red, green, blue)}}, "transition": {{ transition }}}",
+            "payload_on": "on",
+            "payload_off": "off",
+            "qos": 0,
+        }
+    }
+
+    assert await async_setup_component(hass, mqtt.DOMAIN, {mqtt.DOMAIN: config})
+    await hass.async_block_till_done()
+    mqtt_mock = await mqtt_mock_entry_with_yaml_config()
+
+    state = hass.states.get("light.test")
+    assert state.state == STATE_UNKNOWN
+
+    await common.async_turn_on(hass, "light.test", rgb_color=[255, 128, 64], transition=5)
+
+    mqtt_mock.async_publish.assert_has_calls(
+        [
+            call("test_light_rgb/set", "on", 0, False),
+            call("test_light_rgb/rgb/set", "{\"color": \"#ff8040\", \"transition\": 5}", 0, False),
+        ],
+        any_order=True,
+    )
+
+    state = hass.states.get("light.test")
+    assert state.state == STATE_ON
+    assert state.attributes["rgb_color"] == (255, 128, 64)
+
+
 async def test_sending_mqtt_rgbw_command_with_template(
     hass, mqtt_mock_entry_with_yaml_config
 ):
